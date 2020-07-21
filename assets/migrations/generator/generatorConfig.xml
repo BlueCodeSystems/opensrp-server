@@ -1,12 +1,10 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE generatorConfiguration PUBLIC "-//mybatis.org//DTD MyBatis Generator Configuration 1.0//EN" "http://mybatis.org/dtd/mybatis-generator-config_1_0.dtd">
-<generatorConfiguration>
+<?xml version="1.0" encoding="UTF-8"?> <!DOCTYPE generatorConfiguration PUBLIC "-//mybatis.org//DTD MyBatis Generator Configuration 1.0//EN" "http://mybatis.org/dtd/mybatis-generator-config_1_0.dtd"> <generatorConfiguration>
 	<classPathEntry
 		location="/Users/coder/Projects/opensrp-server/assets/migrations/drivers/postgresql-42.2.1.jar" />
 	<context id="core">
 		<!-- <plugin type="org.mybatis.generator.plugins.RowBoundsPlugin"></plugin> -->
-		<jdbcConnection connectionURL="jdbc:postgresql://localhost:5432/opensrp"
-			driverClass="org.postgresql.Driver" password="admin" userId="opensrp_admin" />
+		<jdbcConnection connectionURL="${OPENSRP_POSTGRES_JDBC}"
+			driverClass="org.postgresql.Driver" password="${OPENSRP_POSTGRES_USER}" userId="${OPENSRP_POSTGRES_USER_PASSWORD}" />
 		<javaModelGenerator targetPackage="org.opensrp.domain.postgres"
 			targetProject="opensrp-core" />
 		<sqlMapGenerator targetPackage="org.opensrp.repository.postgres.mapper.xml"

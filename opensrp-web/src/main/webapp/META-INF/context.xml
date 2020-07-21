@@ -15,9 +15,9 @@
 		testOnBorrow="true"
 		removeAbandoned="true"
 		removeAbandonedTimeout="233"
-		username="$OPENSRP_POSTGRES_USER"
-		password="$OPENSRP_POSTGRES_USER_PASSWORD"
+		username="${OPENSRP_POSTGRES_USER}"
+		password="${OPENSRP_POSTGRES_USER_PASSWORD}"
 		driverClassName="org.postgresql.Driver"
-		url="$OPENSRP_POSTGRES_JDBC"
+		url="${OPENSRP_POSTGRES_JDBC}"
      />
 </Context>
