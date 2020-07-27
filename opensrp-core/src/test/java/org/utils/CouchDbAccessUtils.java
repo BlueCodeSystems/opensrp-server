@@ -13,7 +13,7 @@ import java.util.List;
 
 public final class CouchDbAccessUtils {
 
-	public static final String TEST_REMOTE_URL = "http://localhost:5984";
+	public static final String TEST_REMOTE_URL = "http://couchdb-service-dev:5984";
 
 	private CouchDbAccessUtils() {
 
