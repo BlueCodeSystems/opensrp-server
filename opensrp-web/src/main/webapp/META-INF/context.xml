@@ -18,6 +18,6 @@
 		username="${OPENSRP_POSTGRES_USER}"
 		password="${OPENSRP_POSTGRES_USER_PASSWORD}"
 		driverClassName="org.postgresql.Driver"
-		url="${OPENSRP_POSTGRES_JDBC}"
+		url="jdbc:postgresql:${POSTGRES_HOST}:5984/opensrp"
      />
 </Context>

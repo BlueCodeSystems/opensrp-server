@@ -3,7 +3,7 @@
 		location="/Users/coder/Projects/opensrp-server/assets/migrations/drivers/postgresql-42.2.1.jar" />
 	<context id="core">
 		<!-- <plugin type="org.mybatis.generator.plugins.RowBoundsPlugin"></plugin> -->
-		<jdbcConnection connectionURL="${OPENSRP_POSTGRES_JDBC}"
+		<jdbcConnection connectionURL="jdbc:postgresql:${POSTGRES_HOST}:5984/opensrp"
 			driverClass="org.postgresql.Driver" password="${OPENSRP_POSTGRES_USER}" userId="${OPENSRP_POSTGRES_USER_PASSWORD}" />
 		<javaModelGenerator targetPackage="org.opensrp.domain.postgres"
 			targetProject="opensrp-core" />
