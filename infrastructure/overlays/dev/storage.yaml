@@ -1,0 +1,52 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-pv-claim
+spec:
+  selector:
+    matchLabels:
+      app: zeir-app
+      environment: development
+  storageClassName: manual
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: couchdb-pv-claim
+  labels:
+    app: zeir-app
+spec:
+  selector:
+    matchLabels:
+      app: zeir-app
+      environment: development
+  storageClassName: manual
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: couchdb-lucene-pv-claim
+  labels:
+    app: zeir-app
+spec:
+  selector:
+    matchLabels:
+      app: zeir-app
+      environment: development
+  storageClassName: manual
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi

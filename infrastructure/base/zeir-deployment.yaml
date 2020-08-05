@@ -1,0 +1,1008 @@
+--- 
+apiVersion: v1
+kind: Service 
+metadata: 
+  name: mysql-service
+  labels:
+    app: zeir-app
+spec:
+  ports:
+  - port: 3306
+  selector:
+    app: zeir-app
+  clusterIP: None
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-cnf
+  labels:
+    app: zeir-app
+data:
+  my.cnf: |
+    [mysqld]
+    datadir=/var/lib/mysql
+    collation-server=utf8_unicode_ci
+    init-connect='SET NAMES utf8'
+    character-set-server=utf8
+    bind-address=0.0.0.0
+    innodb_buffer_pool_size=2G
+    innodb_log_buffer_size=256M
+    innodb_log_file_size=1G
+    innodb_write_io_threads=16
+    innodb_flush_log_at_trx_commit=0
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: zeir-config
+  labels:
+    app: zeir-app
+data:
+  zeir-database: openmrs
+  couchdb-username: zeir
+  openmrs-mysql-database: openmrs
+  openmrs-ui-username: admin
+  openmrs-mysql-username: openmrs
+  opensrp-mysql-database: opensrp
+  opensrp-mysql-motech-database: motech
+  opensrp-mysql-reporting-database: reporting
+  opensrp-mysql-anm-database: anm
+  opensrp-postgres-database: opensrp
+  opensrp-postgres-user: opensrp
+  dhis2-username: zeir
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-init-script
+  labels:
+    app: zeir-app
+data:
+  mysql-init.sh: |
+    #!/bin/bash
+    echo "Creating initial databases"
+    mysql -u root -p"$MYSQL_ROOT_PASSWORD" -e "CREATE DATABASE $OPENSRP_MYSQL_DATABASE /*\!40100 DEFAULT CHARACTER SET utf8 */;"
+    mysql -u root -p"$MYSQL_ROOT_PASSWORD" -e "CREATE DATABASE $OPENMRS_MYSQL_DATABASE /*\!40100 DEFAULT CHARACTER SET utf8 */;"
+    mysql -u root -p"$MYSQL_ROOT_PASSWORD" -e "CREATE DATABASE $OPENSRP_MYSQL_MOTECH_DATABASE /*\!40100 DEFAULT CHARACTER SET utf8 */;"
+    mysql -u root -p"$MYSQL_ROOT_PASSWORD" -e "CREATE DATABASE $OPENSRP_MYSQL_REPORTING_DATABASE /*\!40100 DEFAULT CHARACTER SET utf8 */;"
+    mysql -u root -p"$MYSQL_ROOT_PASSWORD" -h "$MYSQL_HOST" -e "CREATE DATABASE $OPENSRP_MYSQL_ANM_DATABASE /*\!40100 DEFAULT CHARACTER SET utf8 */;"
+    mysql -u root -p"$MYSQL_ROOT_PASSWORD" -h "$MYSQL_HOST" -e "GRANT ALL ON \`$OPENMRS_MYSQL_DATABASE\`.* TO '$OPENMRS_MYSQL_USER'@'%' IDENTIFIED BY '$OPENMRS_MYSQL_USER_PASSWORD';"
+    mysql -u root -p"$MYSQL_ROOT_PASSWORD" -h "$MYSQL_HOST" -e "GRANT ALL ON \`$OPENSRP_MYSQL_DATABASE\`.* TO '$OPENSRP_MYSQL_USER'@'%' IDENTIFIED BY '$OPENMRS_MYSQL_USER_PASSWORD';"
+    mysql -u root -p"$MYSQL_ROOT_PASSWORD" -h "$MYSQL_HOST" -e "GRANT ALL ON \`$OPENSRP_MYSQL_MOTECH_DATABASE\`.* TO '$OPENSRP_MYSQL_USER'@'%' ;"
+    mysql -u root -p"$MYSQL_ROOT_PASSWORD" -h "$MYSQL_HOST" -e "GRANT ALL ON \`$OPENSRP_MYSQL_REPORTING_DATABASE\`.* TO '$OPENSRP_MYSQL_USER'@'%' ;"
+    mysql -u root -p"$MYSQL_ROOT_PASSWORD" -h "$MYSQL_HOST" -e "GRANT ALL ON \`$OPENSRP_MYSQL_ANM_DATABASE\`.* TO '$OPENSRP_MYSQL_USER'@'%' ;"
+    mysql -u root -p"$MYSQL_ROOT_PASSWORD" -h "$MYSQL_HOST" -e "FLUSH PRIVILEGES;"
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql-app
+  labels:
+    app: zeir-app
+spec:
+  serviceName: mysql-service
+  selector:
+    matchLabels:
+      app: zeir-app
+  template:
+    metadata:
+      labels:
+        app: zeir-app
+    spec:
+      containers:
+      - image: mysql:5.6
+        name: mysql-container
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: zeir-secrets
+              key: mysql-root-password
+        - name: OPENSRP_MYSQL_USER_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: zeir-secrets
+              key: mysql-user-password
+        - name: OPENMRS_MYSQL_USER_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: zeir-secrets
+              key: mysql-user-password
+        - name: OPENMRS_MYSQL_USER
+          valueFrom:
+            configMapKeyRef:
+              name: zeir-config
+              key: openmrs-mysql-username
+        - name: OPENMRS_MYSQL_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: zeir-config
+              key: openmrs-mysql-database
+        - name: OPENSRP_MYSQL_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: zeir-config
+              key: opensrp-mysql-database
+        - name: OPENSRP_MYSQL_MOTECH_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: zeir-config
+              key: opensrp-mysql-motech-database
+        - name: OPENSRP_MYSQL_REPORTING_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: zeir-config
+              key: opensrp-mysql-reporting-database
+        - name: OPENSRP_MYSQL_ANM_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: zeir-config
+              key: opensrp-mysql-anm-database
+        ports:
+        - containerPort: 3306
+          name: mysql-port
+        volumeMounts:
+        - name: mysql-persistent-storage
+          mountPath: "/var/lib/mysql"
+          subPath: "mysql"
+        - name: mysql-cnf-volume
+          mountPath: /etc/mysql
+          readOnly: true
+        - name: mysql-init-volume
+          mountPath: /docker-entrypoint-initdb.d
+          #mountPath: /script
+          readOnly: true
+      volumes:
+      - name: mysql-persistent-storage
+        persistentVolumeClaim:
+          claimName: mysql-pv-claim
+      - name: mysql-cnf-volume
+        configMap:
+          name: mysql-cnf
+      - name: mysql-init-volume
+        configMap:
+          name: mysql-init-script
+      - name: zeir-config
+        configMap:
+          name: zeir-config
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-script
+  labels:
+    app: zeir-app
+data:
+  postgres-init.sh: |
+    #!/bin/bash
+    if psql  -U $POSTGRES_USER -lqt | cut -d \| -f 1 | grep -qw superset ; then
+        echo "Database superset already created"
+    else
+        echo "Creating Database superset"
+        psql -U $POSTGRES_USER -c "CREATE DATABASE superset";
+        psql -U $POSTGRES_USER -c "CREATE USER superset WITH SUPERUSER PASSWORD '$SUPERSET_DB_PASSWORD'";
+        psql -U $POSTGRES_USER -c "GRANT ALL PRIVILEGES ON DATABASE superset TO superset";
+    fi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+  labels:
+    app: zeir-app
+spec:
+  ports:
+  - port: 5432
+  selector:
+    app: zeir-app
+  clusterIP: None
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres-app
+  labels:
+    app: zeir-app
+spec:
+  serviceName: postgres-service
+  selector:
+    matchLabels:
+      app: zeir-app
+  template:
+    metadata:
+      labels:
+        app: zeir-app
+    spec:
+      containers:
+      - image: postgres:9.6
+        name: postgres-container
+        env:
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: zeir-secrets
+              key: postgres-password
+        - name: POSTGRES_USER
+          valueFrom:
+            configMapKeyRef:
+              name: zeir-config
+              key: opensrp-postgres-user
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: zeir-config
+              key: opensrp-postgres-database
+        - name: SUPERSET_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: zeir-secrets
+              key: superset-db-password
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        ports:
+        - containerPort: 5432
+          name: postgres-port
+        volumeMounts:
+        - name: postgres-persistent-storage
+          mountPath: /var/lib/postgresql/data
+        - name: postgres-init-volume
+          mountPath: /docker-entrypoint-initdb.d
+          readOnly: true
+      volumes:
+      - name: postgres-persistent-storage
+        persistentVolumeClaim:
+          claimName: postgres-pv-claim
+      - name: postgres-init-volume
+        configMap:
+          name: postgres-init-script
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: couchdb-service
+  labels:
+    app: zeir-app
+spec:
+  ports:
+  - port: 5432
+  selector:
+    app: couchdb-app
+  clusterIP: None
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: couchdb-ini
+  labels:
+    app: zeir-app
+data:
+  local.ini: |
+    [httpd_global_handlers]
+    _fti = {couch_httpd_proxy, handle_proxy_req. << "http://couchdb-lucene-service-prod:5985">>}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: couchdb-app
+  labels:
+    app: zeir-app
+spec:
+  serviceName: "couchdb-service"
+  selector:
+    matchLabels:
+      app: couchdb-app
+  template:
+    metadata:
+      labels:
+        app: couchdb-app
+    spec:
+      containers:
+      - image: couchdb:1.6.1
+        name: couchdb-container
+        env:
+        - name: COUCHDB_USER
+          valueFrom:
+            configMapKeyRef:
+              name: zeir-config
+              key: couchdb-username
+        - name: COUCHDB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: zeir-secrets
+              key: couchdb-password
+        ports:
+        - containerPort: 5984
+          name: couch-port
+        volumeMounts:
+        - name: local-ini
+          mountPath: /opt/couchdb/etc/local.d
+        - name: couchdb-storage
+          mountPath: /usr/local/var/lib/couchdb
+      volumes:
+      - name: couchdb-storage
+        persistentVolumeClaim:
+          claimName: couchdb-pv-claim
+      - name: local-ini
+        configMap:
+          name: couchdb-ini
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: couchdb-lucene-service
+  labels:
+    app: zeir-app
+spec:
+  ports:
+  - port: 5985
+  selector:
+    app: couchdb-lucene-app
+  clusterIP: None
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: couchdb-lucene-app
+  labels:
+    app: zeir-app
+spec:
+  serviceName: "couchdb-lucene-service"
+  selector:
+    matchLabels:
+      app: couchdb-lucene-app
+  template:
+    metadata:
+      labels:
+        app: couchdb-lucene-app
+    spec:
+      containers:
+      - image: klaemo/couchdb-lucene
+        name: couchdb-lucene-container
+        volumeMounts:
+        - name: couchdb-lucene-storage
+          mountPath: /opt/couchdb-lucene/indexes
+        ports:
+        - containerPort: 5985
+      volumes:
+      - name: couchdb-lucene-storage
+        persistentVolumeClaim:
+          claimName: couchdb-lucene-pv-claim
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openmrs-module-download-script-1x-old
+  labels:
+    app: zeir-app
+data:
+  modules-to-download.txt: |
+    https://raw.githubusercontent.com/OpenSRP/docker-builds/master/composed/files/openmrs_modules/teammodule-1.2.0.omod
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openmrs-module-download-script-1x
+  labels:
+    app: zeir-app
+data:
+  modules-to-download.txt: |
+    https://raw.githubusercontent.com/OpenSRP/docker-builds/master/composed/files/openmrs_modules/atomfeed-3.0.1a.omod
+    https://raw.githubusercontent.com/OpenSRP/docker-builds/master/composed/files/openmrs_modules/calculation-1.1.omod
+    https://raw.githubusercontent.com/OpenSRP/docker-builds/master/composed/files/openmrs_modules/cohort-2.0.omod
+    https://raw.githubusercontent.com/OpenSRP/docker-builds/master/composed/files/openmrs_modules/dhislocation-1.1.0b.omod
+    https://raw.githubusercontent.com/OpenSRP/docker-builds/master/composed/files/openmrs_modules/dhisreport-2.1-SNAPSHOT.omod 
+    https://raw.githubusercontent.com/OpenSRP/docker-builds/master/composed/files/openmrs_modules/htmlformentry-2.5.omod
+    https://raw.githubusercontent.com/OpenSRP/docker-builds/master/composed/files/openmrs_modules/htmlwidgets-1.6.7.omod
+    https://raw.githubusercontent.com/OpenSRP/docker-builds/master/composed/files/openmrs_modules/idgen-webservices-1.1-SNAPSHOT.omod
+    https://raw.githubusercontent.com/OpenSRP/docker-builds/master/composed/files/openmrs_modules/patientimage-1.0.omod
+    https://raw.githubusercontent.com/OpenSRP/docker-builds/master/composed/files/openmrs_modules/reporting-0.9.8.1.omod
+    https://raw.githubusercontent.com/OpenSRP/docker-builds/master/composed/files/openmrs_modules/reportingrest-1.5.omod
+    https://raw.githubusercontent.com/OpenSRP/docker-builds/master/composed/files/openmrs_modules/serialization.xstream-0.2.7.omod
+    https://raw.githubusercontent.com/OpenSRP/docker-builds/master/composed/files/openmrs_modules/teammodule-1.2.0.omod
+    https://raw.githubusercontent.com/OpenSRP/docker-builds/master/composed/files/openmrs_modules/uiframework-3.3.1.omod
+    https://raw.githubusercontent.com/OpenSRP/docker-builds/master/composed/files/openmrs_modules/webservices.rest-2.20.0.omod
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openmrs-module-download-script-2x-old
+  labels:
+    app: zeir-app
+data:
+  modules-to-download.txt: |
+    https://raw.githubusercontent.com/OpenSRP/docker-builds/master/composed/files/openmrs_modules_v2/legacyui-1.4.0.omod
+    https://raw.githubusercontent.com/OpenSRP/docker-builds/master/composed/files/openmrs_modules_v2/dhislocation-1.2.0.omod
+    https://raw.githubusercontent.com/OpenSRP/docker-builds/master/composed/files/openmrs_modules_v2/event-2.6.0.omod
+    https://raw.githubusercontent.com/OpenSRP/docker-builds/master/composed/files/openmrs_modules_v2/idgen-4.5.0.omod
+    https://raw.githubusercontent.com/OpenSRP/docker-builds/master/composed/files/openmrs_modules_v2/providermanagement-2.10.0.omod
+    https://raw.githubusercontent.com/OpenSRP/docker-builds/master/composed/files/openmrs_modules_v2/registrationcore-1.8.0.omod
+    https://raw.githubusercontent.com/OpenSRP/docker-builds/master/composed/files/openmrs_modules_v2/teammodule-2.0.0B.omod
+    https://raw.githubusercontent.com/OpenSRP/docker-builds/master/composed/files/openmrs_modules_v2/uicommons-2.6.0.omod
+    https://raw.githubusercontent.com/OpenSRP/docker-builds/master/composed/files/openmrs_modules_v2/uiframework-3.13.0.omod
+    https://raw.githubusercontent.com/OpenSRP/docker-builds/master/composed/files/openmrs_modules_v2/uilibrary-2.0.6.omod
+    https://raw.githubusercontent.com/OpenSRP/docker-builds/master/composed/files/openmrs_modules_v2/webservices.rest-2.24.0.omod
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: openmrs-service
+  labels:
+    app: zeir-app
+spec:
+  ports:
+  - port: 8080
+  selector:
+    app: openmrs-app
+  type:
+    LoadBalancer
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openmrs-app
+  labels:
+    app: zeir-app
+spec:
+  selector:
+    matchLabels:
+      app: openmrs-app
+  template:
+    metadata:
+      labels:
+        app: openmrs-app
+    spec:
+      initContainers:
+      - image: openmrs/openmrs-distro-platform:1.11.9-SNAPSHOT
+        #This container just downloads the required files and shuts down.
+        name: module-download-container
+        command: ["/bin/sh", "-c"]
+        args:
+          - rm -rf /root/.OpenMRS/modules;
+            wget -i /etc/scripts/modules-to-download.txt -P /root/.OpenMRS/modules;
+        volumeMounts:
+        - name: openmrs-module-download-script
+          mountPath: /etc/scripts
+          readOnly: true
+        - name: openmrs-modules-storage
+          mountPath: /root/.OpenMRS/modules
+          subPath: modules
+      containers:
+      - image: bluecodesystems/zeir-openmrs:1.11.5-1
+        imagePullPolicy: Always
+        name: openmrs-container
+        env:
+        - name: OPENMRS_RUNTIME_PROPERTIES_FILE
+          value: /usr/local/tomcat/openmrs-runtime.properties
+        - name: JDBC_URL
+          value: jdbc:mysql://$(mysql-service):3306/openmrs?autoReconnect=true&sessionVariables=storage_engine=InnoDB&useUnicode=true&characterEncoding=UTF-8&zeroDateTimeBehavior=convertToNull
+        - name: DB_HOST
+          value: $(mysql-service)
+        - name: DB_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: zeir-config
+              key: openmrs-mysql-database
+        - name: DB_USERNAME
+          valueFrom:
+            configMapKeyRef:
+              name: zeir-config
+              key: openmrs-mysql-username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: zeir-secrets
+              key: mysql-user-password
+        - name: DB_CREATE_TABLES
+          value: 'true'
+        - name: DB_AUTO_UPDATE
+          value: 'false'
+        - name: MODULE_WEB_ADMIN
+          value: 'true'
+        ports:
+        - containerPort: 8080
+          name: openmrs-port
+        volumeMounts:
+        - name: openmrs-persistent-storage
+          mountPath: /root/.OpenMRS
+        - name: openmrs-modules-storage
+          mountPath: /root/.OpenMRS/modules
+          subPath: modules
+        - name: openmrs-owa-storage
+          mountPath: /root/.OpenMRS/owa
+          subPath: owa
+      volumes:
+      - name: openmrs-persistent-storage
+        persistentVolumeClaim:
+          claimName: openmrs-pv-claim
+      - name: openmrs-modules-storage
+        persistentVolumeClaim:
+          claimName: openmrs-modules-pv-claim
+      - name: openmrs-owa-storage
+        persistentVolumeClaim:
+          claimName: openmrs-owa-pv-claim
+      - name: openmrs-module-download-script
+        configMap:
+          name: openmrs-module-download-script-1x
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: opensrp-service
+  labels:
+    app: zeir-app
+spec:
+  ports:
+  - port: 8080
+  selector:
+    app: opensrp-app
+  type:
+    LoadBalancer
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opensrp-build-script
+  labels:
+    app: zeir-app
+data:
+  opensrp-build.sh: |
+    apt-get update
+    apt-get install -y gettext
+    apt-get install -y moreutils
+    cd /etc/build-dir
+    if [ ! -d "opensrp-server" ] ; then
+       git clone --recurse-submodules https://github.com/BlueCodeSystems/opensrp-server
+       cd opensrp-server
+    else    
+       cd "opensrp-server"
+       git reset --hard HEAD
+       git pull https://github.com/BlueCodeSystems/opensrp-server
+    fi
+    envsubst < assets/config/opensrp.properties | sponge assets/config/opensrp.properties
+    envsubst < assets/config/activemq.properties | sponge assets/config/activemq.properties
+    envsubst < assets/config/couchdb.properties | sponge assets/config/couchdb.properties
+    envsubst < opensrp-web/src/main/resources/quartz.properties | sponge opensrp-web/src/main/resources/quartz.properties
+    envsubst < opensrp-web/src/main/webapp/META-INF/context.xml | sponge opensrp-web/src/main/webapp/META-INF/context.xml
+    envsubst < assets/migrations/environments/test.properties | sponge assets/migrations/environments/test.properties
+    envsubst < assets/migrations/generator/generatorConfig.xml | sponge assets/migrations/generator/generatorConfig.xml
+
+    mvn clean package -Dmaven.test.skip=true -P couchdb,jedis -f pom.xml
+    cp opensrp-web/target/opensrp.war  /usr/local/tomcat/webapps/opensrp.war
+---
+#This job builds the opensrp application using maven and places it in a volume that tomcat can access.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opensrp-app
+  labels:
+    app: zeir-app
+spec:
+  selector:
+    matchLabels:
+      app: opensrp-app
+  template:
+    metadata:
+      labels:
+        app: opensrp-app
+    spec:
+      containers:
+      - image: bluecodesystems/simpleproxy:1.1
+        name: simpleproxy-container
+        command: ["simpleproxy"]
+        args: ["-v", "-L", "localhost:5432", "-R", "$(postgres-service):5432"]
+      - image: tomcat:7.0-jdk8-openjdk
+        name: opensrp-run-container
+        volumeMounts:
+        - name: opensrp-persistent-storage
+          mountPath: /usr/local/tomcat/webapps
+        env:
+        - name: OPENMRS_URL
+          value: http://$(openmrs-service):8080/openmrs/
+        - name: OPENMRS_USERNAME
+          valueFrom:
+            configMapKeyRef:
+              name: zeir-config
+              key: openmrs-ui-username
+        - name: OPENMRS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: zeir-secrets
+              key: openmrs-ui-password
+        - name: OPENSRP_MYSQL_USER
+          valueFrom:
+            configMapKeyRef:
+              name: zeir-config
+              key: openmrs-mysql-username
+        - name: OPENSRP_MYSQL_USER_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: zeir-secrets
+              key: mysql-user-password
+        - name: OPENSRP_MYSQL_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: zeir-config
+              key: opensrp-mysql-database
+        - name: OPENSRP_MYSQL_MOTECH_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: zeir-config
+              key: opensrp-mysql-motech-database
+        - name: OPENSRP_MYSQL_REPORTING_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: zeir-config
+              key: opensrp-mysql-reporting-database
+        - name: OPENSRP_MYSQL_ANM_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: zeir-config
+              key: opensrp-mysql-anm-database
+        - name: COUCHDB_HOST
+          value: $(couchdb-service)
+        - name: COUCHDB_PORT
+          value: "5984"
+        - name: COUCHDB_USER
+          valueFrom:
+            configMapKeyRef:
+              name: zeir-config
+              key: couchdb-username
+        - name: COUCHDB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: zeir-secrets
+              key: couchdb-password
+        - name: REDIS_HOST
+          value: $(redis-service)
+        - name: REDIS_PORT
+          value: "6379"
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: zeir-secrets
+              key: redis-password
+        - name: MYSQL_HOST
+          value: $(mysql-service)
+        - name: POSTGRES_HOST
+          value: $(postgres-service)
+        - name: OPENSRP_POSTGRES_JDBC
+          value: jdbc:postgresql://$(postgres-service):5432/opensrp
+        - name: OPENSRP_TEST_POSTGRES_JDBC
+          value: jdbc:postgresql://$(postgres-service):5432/opensrp_test
+        - name: DHIS2_URL
+          value: $(dhis2-service):8080/api
+        - name: DHIS2_USERNAME
+          valueFrom:
+            configMapKeyRef:
+              name: zeir-config
+              key: dhis2-username
+        - name: DHIS2_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: zeir-secrets
+              key: dhis2-password
+        - name: OPENSRP_POSTGRES_USER
+          valueFrom:
+            configMapKeyRef:
+              name: zeir-config
+              key: opensrp-postgres-user
+        - name: OPENSRP_POSTGRES_USER_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: zeir-secrets
+              key: opensrp-postgres-password
+        - name: OPENSRP_POSTGRES_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: zeir-config
+              key: opensrp-postgres-database
+        - name: ACTIVEMQ_URL
+          value: tcp://$(activemq-service):61616
+        ports:
+        - containerPort: 8080
+          name: opensrp-port
+      initContainers:
+      - image: maven:3.6.3-jdk-8
+        name: opensrp-build-container
+        imagePullPolicy: Always
+        command: ["bash", "/etc/scripts/opensrp-build.sh"]
+        env:
+        - name: CATALINA_OPTS
+          value: "-server -Xms512m -Xmx1024m"
+        - name: OPENMRS_URL
+          value: http://$(openmrs-service):8080/openmrs/
+        - name: OPENMRS_USERNAME
+          valueFrom:
+            configMapKeyRef:
+              name: zeir-config
+              key: openmrs-ui-username
+        - name: OPENMRS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: zeir-secrets
+              key: openmrs-ui-password
+        - name: OPENSRP_MYSQL_USER
+          valueFrom:
+            configMapKeyRef:
+              name: zeir-config
+              key: openmrs-mysql-username
+        - name: OPENSRP_MYSQL_USER_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: zeir-secrets
+              key: mysql-user-password
+        - name: OPENSRP_MYSQL_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: zeir-config
+              key: opensrp-mysql-database
+        - name: OPENSRP_MYSQL_MOTECH_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: zeir-config
+              key: opensrp-mysql-motech-database
+        - name: OPENSRP_MYSQL_REPORTING_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: zeir-config
+              key: opensrp-mysql-reporting-database
+        - name: OPENSRP_MYSQL_ANM_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: zeir-config
+              key: opensrp-mysql-anm-database
+        - name: COUCHDB_HOST
+          value: $(couchdb-service)
+        - name: COUCHDB_PORT
+          value: "5984"
+        - name: COUCHDB_USER
+          valueFrom:
+            configMapKeyRef:
+              name: zeir-config
+              key: couchdb-username
+        - name: COUCHDB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: zeir-secrets
+              key: couchdb-password
+        - name: REDIS_HOST
+          value: $(redis-service)
+        - name: REDIS_PORT
+          value: "6379"
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: zeir-secrets
+              key: redis-password
+        - name: MYSQL_HOST
+          value: $(mysql-service)
+        - name: POSTGRES_HOST
+          value: $(postgres-service)
+        - name: OPENSRP_TEST_POSTGRES_JDBC
+          value: jdbc:postgresql://$(postgres-service):5432/opensrp_test
+        - name: DHIS2_URL
+          value: $(dhis2-service):8080/api
+        - name: DHIS2_USERNAME
+          valueFrom:
+            configMapKeyRef:
+              name: zeir-config
+              key: dhis2-username
+        - name: OPENSRP_POSTGRES_USER
+          valueFrom:
+            configMapKeyRef:
+              name: zeir-config
+              key: opensrp-postgres-user
+        - name: DHIS2_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: zeir-secrets
+              key: dhis2-password
+        - name: OPENSRP_POSTGRES_USER_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: zeir-secrets
+              key: opensrp-postgres-password
+        - name: OPENSRP_POSTGRES_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: zeir-config
+              key: opensrp-postgres-database
+        - name: ACTIVEMQ_URL
+          value: tcp://$(activemq-service):61616
+        volumeMounts:
+        - name: opensrp-build-storage
+          mountPath: /etc/build-dir
+        - name: opensrp-build-script-volume
+          mountPath: /etc/scripts
+          readOnly: true
+        - name: maven-build-cache
+          mountPath: /root/.m2
+          readOnly: false
+        - name: opensrp-persistent-storage
+          mountPath: /usr/local/tomcat/webapps
+      volumes:
+      - name: postgres-persistent-storage
+        persistentVolumeClaim:
+          claimName: postgres-pv-claim
+      - name: opensrp-persistent-storage
+        persistentVolumeClaim:
+          claimName: opensrp-persistent-pv-claim
+      - name: opensrp-build-storage
+        persistentVolumeClaim:
+          claimName: opensrp-build-pv-claim
+      - name: maven-build-cache
+        persistentVolumeClaim:
+          claimName: maven-build-cache-claim
+      - name: opensrp-build-script-volume
+        configMap:
+          name: opensrp-build-script
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  labels:
+    app: zeir-app
+spec:
+  ports:
+  - port: 6379
+  selector:
+    app: redis-app
+  clusterIP: None
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  labels:
+    app: zeir-app
+spec:
+  serviceName: "redis-service"
+  selector:
+    matchLabels:
+      app: redis-app
+  template:
+    metadata:
+      labels:
+        app: redis-app
+    spec:
+      containers:
+      - image: redis:6.0.5
+        name: redis-container
+        ports:
+        - containerPort: 6379
+          name: redis-port
+        volumeMounts:
+        - name: redis-storage
+          mountPath: /usr/local/etc/redis/redis
+      volumes:
+      - name: redis-storage
+        persistentVolumeClaim:
+          claimName: redis-pv-claim
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: activemq-service
+  labels:
+    app: zeir-app
+spec:
+  ports:
+  - port: 61616
+  selector:
+    app: activemq-app
+  clusterIP: None
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: activemq
+  labels:
+    app: zeir-app
+spec:
+  serviceName: "activemq-service"
+  selector:
+    matchLabels:
+      app: activemq-app
+  template:
+    metadata:
+      labels:
+        app: activemq-app
+    spec:
+      containers:
+      - image: rmohr/activemq:5.15.9-alpine
+        name: activemq-container
+        ports:
+        - containerPort: 61616
+          name: activemq-port
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: superset-service
+  labels:
+    app: zeir-app
+spec:
+  ports:
+  - port: 8088
+  selector:
+    app: superset-app
+  type:
+    LoadBalancer
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: superset-config
+  labels:
+    app: zeir-app
+data:
+  superset_config.py: |
+    import os
+    MAPBOX_API_KEY = os.getenv('MAPBOX_API_KEY', '')
+    CACHE_CONFIG = {
+      'CACHE_TYPE': 'redis',
+      'CACHE_DEFAULT_TIMEOUT': 300,
+      'CACHE_KEY_PREFIX': 'superset_',
+      'CACHE_REDIS_HOST': os.getenv('REDIS_HOST', ''),
+      'CACHE_REDIS_PORT': 6379,
+      'CACHE_REDIS_DB': 2,
+      'CACHE_REDIS_URL': os.getenv('REDIS_URL', '')
+    }
+    
+    
+    SQLALCHEMY_DATABASE_URI = os.getenv('SQLALCHEMY_DATABASE_URI', '')
+    superset_db_password = os.getenv('SUPERSET_DB_PASSWORD', '')
+    postgres_host = os.getenv('POSTGRES_HOST', '')
+    SQLALCHEMY_DATABASE_URI='postgresql+psycopg2://superset:{0}@{1}:5432/superset'.format(superset_db_password,postgres_host)
+    SQLALCHEMY_TRACK_MODIFICATIONS = True
+    SECRET_KEY = os.getenv('SECRET_KEY', '')
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: superset-app
+  labels:
+    app: zeir-app
+spec:
+  selector:
+    matchLabels:
+      app: superset-app
+  template:
+    metadata:
+      labels:
+        app: superset-app
+    spec:
+      containers:
+      - image: amancevice/superset:0.25.6
+        imagePullPolicy: Always
+        name: superset-container
+        env:
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: zeir-secrets
+              key: superset-secret-key
+        - name: REDIS_HOST
+          value: $(redis-service)
+        - name: POSTGRES_HOST
+          value: $(postgres-service)
+        - name: REDIS_URL
+          value: redis://$(redis-service):6379/2
+        - name: SUPERSET_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: zeir-secrets
+              key: superset-db-password
+        ports:
+        - containerPort: 8088
+          name: superset-port
+        volumeMounts:
+        - name: superset-config
+          mountPath: /etc/superset
+      volumes:
+      - name: superset-config
+        configMap:
+          name: superset-config
+---

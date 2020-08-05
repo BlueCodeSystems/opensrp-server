@@ -1,0 +1,185 @@
+#All the PVS are given 1GB, but this is kustomized using the overlays so that prod has more space vs dev
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-pv-claim
+spec:
+  selector:
+    matchLabels:
+      app: zeir-app
+  storageClassName: local-storage
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 40Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: couchdb-pv-claim
+  labels:
+    app: zeir-app
+spec:
+  selector:
+    matchLabels:
+      app: couchdb-app
+  storageClassName: local-storage
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 30Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: couchdb-lucene-pv-claim
+  labels:
+    app: zeir-app
+spec:
+  selector:
+    matchLabels:
+      app: couchdb-lucene-app
+  storageClassName: local-storage
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: openmrs-pv-claim
+  labels:
+    app: zeir-app
+spec:
+  selector:
+    matchLabels:
+      app: openmrs-app
+  storageClassName: local-storage
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: openmrs-modules-pv-claim
+  labels:
+    app: zeir-app
+spec:
+  selector:
+    matchLabels:
+      app: openmrs-app
+  storageClassName: local-storage
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 500Mi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: openmrs-owa-pv-claim
+  labels:
+    app: zeir-app
+spec:
+  selector:
+    matchLabels:
+      app: openmrs-app
+  storageClassName: local-storage
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 500Mi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-pv-claim
+  labels:
+    app: zeir-app
+spec:
+  selector:
+    matchLabels:
+      app: zeir-redis-app
+  storageClassName: local-storage
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pv-claim
+  labels:
+    app: zeir-app
+spec:
+  selector:
+    matchLabels:
+      app: zeir-postgres-app
+  storageClassName: local-storage
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: opensrp-build-pv-claim
+  labels:
+    app: zeir-app
+spec:
+  selector:
+    matchLabels:
+      app: opensrp-build-app
+  storageClassName: local-storage
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 3Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: maven-build-cache-claim
+  labels:
+    app: zeir-app
+spec:
+  selector:
+    matchLabels:
+      app: opensrp-app
+  storageClassName: local-storage
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: opensrp-persistent-pv-claim
+  labels:
+    app: zeir-app
+spec:
+  selector:
+    matchLabels:
+      app: opensrp-app
+  storageClassName: local-storage
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi

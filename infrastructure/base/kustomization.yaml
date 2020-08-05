@@ -1,0 +1,48 @@
+resources:
+  - storage.yaml
+  - zeir-deployment.yaml
+  - secrets.yaml
+  - ingress.yaml
+vars:
+  - name: mysql-service
+    objref:
+      kind: Service
+      name: mysql-service
+      apiVersion: v1
+    fieldref:
+      fieldpath: metadata.name
+  - name: postgres-service
+    objref:
+      kind: Service
+      name: postgres-service
+      apiVersion: v1
+    fieldref:
+      fieldpath: metadata.name
+  - name: openmrs-service
+    objref:
+      kind: Service
+      name: openmrs-service
+      apiVersion: v1
+    fieldref:
+      fieldpath: metadata.name
+  - name: redis-service
+    objref:
+      kind: Service
+      name: redis-service
+      apiVersion: v1
+    fieldref:
+      fieldpath: metadata.name
+  - name: activemq-service
+    objref:
+      kind: Service
+      name: activemq-service
+      apiVersion: v1
+    fieldref:
+      fieldpath: metadata.name
+  - name: couchdb-service
+    objref:
+      kind: Service
+      name: couchdb-service
+      apiVersion: v1
+    fieldref:
+      fieldpath: metadata.name
