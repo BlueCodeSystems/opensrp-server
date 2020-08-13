@@ -18,7 +18,7 @@ spec:
         backend:
           serviceName: opensrp-service
           servicePort: 8080
-  - host: zeir-superset.bluecodeltd.com
+  - host: zeir-data.bluecodeltd.com
     http:
       paths:
       - path:

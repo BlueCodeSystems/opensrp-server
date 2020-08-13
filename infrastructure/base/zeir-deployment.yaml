@@ -9,8 +9,8 @@ spec:
   ports:
   - port: 3306
   selector:
-    app: zeir-app
-  clusterIP: None
+    app: mysql-app
+  type: ClusterIP
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -21,6 +21,8 @@ metadata:
 data:
   my.cnf: |
     [mysqld]
+    default-storage-engine=InnoDB
+    max_connections=350
     datadir=/var/lib/mysql
     collation-server=utf8_unicode_ci
     init-connect='SET NAMES utf8'
@@ -84,11 +86,11 @@ spec:
   serviceName: mysql-service
   selector:
     matchLabels:
-      app: zeir-app
+      app: mysql-app
   template:
     metadata:
       labels:
-        app: zeir-app
+        app: mysql-app
     spec:
       containers:
       - image: mysql:5.6
@@ -183,6 +185,8 @@ data:
         psql -U $POSTGRES_USER -c "CREATE DATABASE superset";
         psql -U $POSTGRES_USER -c "CREATE USER superset WITH SUPERUSER PASSWORD '$SUPERSET_DB_PASSWORD'";
         psql -U $POSTGRES_USER -c "GRANT ALL PRIVILEGES ON DATABASE superset TO superset";
+        psql -U $POSTGRES_USER -c "CREATE SERVER mysql_server FOREIGN DATA WRAPPER mysql_fdw OPTIONS(host $MYSQL_HOST, port '3306');";
+        psql -U $POSTGRES_USER -c "CREATE USER MAPPING FOR PUBLIC SERVER mysql_server OPTIONS ( username $OPENMRS_MYSQL_USER, password $OPENMRS_MYSQL_USER_PASSWORD)";
     fi
 ---
 apiVersion: v1
@@ -195,8 +199,8 @@ spec:
   ports:
   - port: 5432
   selector:
-    app: zeir-app
-  clusterIP: None
+    app: postgres-app
+  type: ClusterIP
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -208,15 +212,17 @@ spec:
   serviceName: postgres-service
   selector:
     matchLabels:
-      app: zeir-app
+      app: postgres-app
   template:
     metadata:
       labels:
-        app: zeir-app
+        app: postgres-app
     spec:
       containers:
-      - image: postgres:9.6
+      - image: bluecodesystems/postgres-mysql-fdw-9.6:1
         name: postgres-container
+        command: ["docker-entrypoint.sh"] 
+        args: ["-c", "max_connections=400", "-c", "shared_buffers=2GB", "-c", "effective_cache_size=500MB", "-c", "work_mem=10MB"]
         env:
         - name: POSTGRES_PASSWORD
           valueFrom:
@@ -238,6 +244,16 @@ spec:
             secretKeyRef:
               name: zeir-secrets
               key: superset-db-password
+        - name: OPENMRS_MYSQL_USER_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: zeir-secrets
+              key: mysql-user-password
+        - name: OPENMRS_MYSQL_USER
+          valueFrom:
+            configMapKeyRef:
+              name: zeir-config
+              key: openmrs-mysql-username
         - name: PGDATA
           value: /var/lib/postgresql/data/pgdata
         ports:
@@ -265,7 +281,7 @@ metadata:
     app: zeir-app
 spec:
   ports:
-  - port: 5432
+  - port: 5984
   selector:
     app: couchdb-app
   clusterIP: None
@@ -278,6 +294,10 @@ metadata:
     app: zeir-app
 data:
   local.ini: |
+    [couchdb]
+    os_process_timeout=60000
+    [httpd_db_handlers]
+    _fti = {couch_httpd_external, handle_external_req, <<"fti">>}
     [httpd_global_handlers]
     _fti = {couch_httpd_proxy, handle_proxy_req. << "http://couchdb-lucene-service-prod:5985">>}
 ---
@@ -359,6 +379,13 @@ spec:
       containers:
       - image: klaemo/couchdb-lucene
         name: couchdb-lucene-container
+        command: ["/bin/sh", "-c"]
+        args:
+        - sed -e 's/couchdb:5984/$(COUCHDB-HOST):5984/' -i /opt/couchdb-lucene/conf/couchdb-lucene.ini;
+          ./run-lucene.sh
+        env:
+        - name: COUCHDB_HOST
+          value: $(couchdb-service)
         volumeMounts:
         - name: couchdb-lucene-storage
           mountPath: /opt/couchdb-lucene/indexes
@@ -394,7 +421,6 @@ data:
     https://raw.githubusercontent.com/OpenSRP/docker-builds/master/composed/files/openmrs_modules/dhisreport-2.1-SNAPSHOT.omod 
     https://raw.githubusercontent.com/OpenSRP/docker-builds/master/composed/files/openmrs_modules/htmlformentry-2.5.omod
     https://raw.githubusercontent.com/OpenSRP/docker-builds/master/composed/files/openmrs_modules/htmlwidgets-1.6.7.omod
-    https://raw.githubusercontent.com/OpenSRP/docker-builds/master/composed/files/openmrs_modules/idgen-webservices-1.1-SNAPSHOT.omod
     https://raw.githubusercontent.com/OpenSRP/docker-builds/master/composed/files/openmrs_modules/patientimage-1.0.omod
     https://raw.githubusercontent.com/OpenSRP/docker-builds/master/composed/files/openmrs_modules/reporting-0.9.8.1.omod
     https://raw.githubusercontent.com/OpenSRP/docker-builds/master/composed/files/openmrs_modules/reportingrest-1.5.omod
@@ -460,6 +486,9 @@ spec:
         args:
           - rm -rf /root/.OpenMRS/modules;
             wget -i /etc/scripts/modules-to-download.txt -P /root/.OpenMRS/modules;
+        env:
+        - name: TZ
+          value: "Africa/Lusaka"
         volumeMounts:
         - name: openmrs-module-download-script
           mountPath: /etc/scripts
@@ -472,6 +501,8 @@ spec:
         imagePullPolicy: Always
         name: openmrs-container
         env:
+        - name: TZ
+          value: "Africa/Lusaka"
         - name: OPENMRS_RUNTIME_PROPERTIES_FILE
           value: /usr/local/tomcat/openmrs-runtime.properties
         - name: JDBC_URL
@@ -567,7 +598,7 @@ data:
     envsubst < assets/migrations/environments/test.properties | sponge assets/migrations/environments/test.properties
     envsubst < assets/migrations/generator/generatorConfig.xml | sponge assets/migrations/generator/generatorConfig.xml
 
-    mvn clean package -Dmaven.test.skip=true -P couchdb,jedis -f pom.xml
+    mvn clean package -Dhttps.protocols=TLSv1.2 -Dmaven.test.skip=true -P postgres,jedis,basic_auth -f pom.xml
     cp opensrp-web/target/opensrp.war  /usr/local/tomcat/webapps/opensrp.war
 ---
 #This job builds the opensrp application using maven and places it in a volume that tomcat can access.
@@ -587,16 +618,14 @@ spec:
         app: opensrp-app
     spec:
       containers:
-      - image: bluecodesystems/simpleproxy:1.1
-        name: simpleproxy-container
-        command: ["simpleproxy"]
-        args: ["-v", "-L", "localhost:5432", "-R", "$(postgres-service):5432"]
       - image: tomcat:7.0-jdk8-openjdk
         name: opensrp-run-container
         volumeMounts:
         - name: opensrp-persistent-storage
           mountPath: /usr/local/tomcat/webapps
         env:
+        - name: TZ
+          value: "Africa/Lusaka"
         - name: OPENMRS_URL
           value: http://$(openmrs-service):8080/openmrs/
         - name: OPENMRS_USERNAME
@@ -702,12 +731,22 @@ spec:
         ports:
         - containerPort: 8080
           name: opensrp-port
+        readinessProbe:
+          #Opensrp takes very long to start - probe it every 20mins for a total of 4 hours before giving up or shutting down already running containers.
+          httpGet:
+            path: /opensrp
+            port: opensrp-port
+          initialDelaySeconds: 10
+          periodSeconds: 1200
+          failureThreshold: 12
       initContainers:
       - image: maven:3.6.3-jdk-8
         name: opensrp-build-container
         imagePullPolicy: Always
         command: ["bash", "/etc/scripts/opensrp-build.sh"]
         env:
+        - name: TZ
+          value: "Africa/Lusaka"
         - name: CATALINA_OPTS
           value: "-server -Xms512m -Xmx1024m"
         - name: OPENMRS_URL
@@ -822,9 +861,6 @@ spec:
         - name: opensrp-persistent-storage
           mountPath: /usr/local/tomcat/webapps
       volumes:
-      - name: postgres-persistent-storage
-        persistentVolumeClaim:
-          claimName: postgres-pv-claim
       - name: opensrp-persistent-storage
         persistentVolumeClaim:
           claimName: opensrp-persistent-pv-claim
@@ -870,6 +906,14 @@ spec:
       containers:
       - image: redis:6.0.5
         name: redis-container
+        command: ["redis-server"]
+        args: ["--requirepass", "$(REDIS_PASSWORD)"]
+        env: 
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: zeir-secrets
+              key: redis-password
         ports:
         - containerPort: 6379
           name: redis-port
@@ -948,7 +992,8 @@ data:
       'CACHE_REDIS_HOST': os.getenv('REDIS_HOST', ''),
       'CACHE_REDIS_PORT': 6379,
       'CACHE_REDIS_DB': 2,
-      'CACHE_REDIS_URL': os.getenv('REDIS_URL', '')
+      'CACHE_REDIS_URL': 'redis://:{0}@{1}:6379/2'.format(os.getenv('REDIS_PASSWORD',''), os.getenv('REDIS_HOST', ''))
+
     }
     
     
@@ -975,7 +1020,7 @@ spec:
         app: superset-app
     spec:
       containers:
-      - image: amancevice/superset:0.25.6
+      - image: amancevice/superset:0.26.3
         imagePullPolicy: Always
         name: superset-container
         env:
@@ -995,6 +1040,11 @@ spec:
             secretKeyRef:
               name: zeir-secrets
               key: superset-db-password
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: zeir-secrets
+              key: redis-password
         ports:
         - containerPort: 8088
           name: superset-port
@@ -1005,4 +1055,3 @@ spec:
       - name: superset-config
         configMap:
           name: superset-config
----

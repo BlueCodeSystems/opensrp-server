@@ -6,13 +6,13 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app: zeir-app
+      app: mysql-app
   storageClassName: local-storage
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 40Gi
+      storage: 60Gi
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -108,7 +108,7 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app: zeir-redis-app
+      app: redis-app
   storageClassName: local-storage
   accessModes:
     - ReadWriteOnce
@@ -131,7 +131,7 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 20Gi
+      storage: 90Gi
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
