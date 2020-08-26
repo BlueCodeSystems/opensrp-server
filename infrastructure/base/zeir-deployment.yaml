@@ -654,7 +654,7 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: opensrp-build-script
+  name: opensrp-build-script-refactor
   labels:
     app: zeir-app
 data:
@@ -730,7 +730,7 @@ data:
     
     cd ..
     if [ ! -d "opensrp-server-web" ] ; then
-        git clone https://github.com/OpenSRP/opensrp-server-web.git
+        git clone https://github.com/BlueCodeSystems/opensrp-server-web.git
         cd opensrp-server-web
         git submodule init
         git config submodule.configs.url https://github.com/BlueCodeSystems/opensrp-server-configs
@@ -751,7 +751,7 @@ data:
     envsubst < src/main/resources/quartz.properties | sponge src/main/resources/quartz.properties
     envsubst < src/main/webapp/META-INF/context.xml | sponge src/main/webapp/META-INF/context.xml
     mvn clean package -Dhttps.protocols=TLSv1.2 -Dmaven.test.skip=true -P postgres,jedis,basic_auth -f pom.xml
-    cp /etc/build-dir/opensrp-server-web/target/opensrp.war  /usr/local/tomcat/webapps/opensrp.war
+    cp /etc/build-dir/opensrp-server-web/target/opensrp.war /usr/local/tomcat/webapps/opensrp.war
 ---
 #This job builds the opensrp application using maven and places it in a volume that tomcat can access.
 apiVersion: apps/v1
@@ -892,7 +892,7 @@ spec:
           periodSeconds: 1200
           failureThreshold: 12
       initContainers:
-      - image: maven:3.6.3-jdk-11
+      - image: maven:3.6.3-jdk-8
         name: opensrp-build-container
         imagePullPolicy: Always
         command: ["bash", "/etc/scripts/opensrp-build.sh"]
@@ -1024,7 +1024,7 @@ spec:
           claimName: maven-build-cache-claim
       - name: opensrp-build-script-volume
         configMap:
-          name: opensrp-build-script
+          name: opensrp-build-script-pre-factor
 ---
 apiVersion: v1
 kind: Service
