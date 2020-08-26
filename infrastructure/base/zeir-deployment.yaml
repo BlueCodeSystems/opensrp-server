@@ -274,6 +274,55 @@ spec:
           name: postgres-init-script
 ---
 apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opensrp-etl-script
+  labels:
+    app: zeir-app
+data:
+  opensrp-etl.sh: |
+    #!/bin/sh
+    - git clone https://github.com/BlueCodeSystems/opensrp-scripts;
+    - psql -H $DB_HOST -U $DB_USERNAME opensrp-scripts/opensrp-etl/refresh_all_materialized_views.sql;
+    - psql -H $DB_HOST -U $DB_USERNAME opensrp-scripts/opensrp-etl/facility_reporting_tables.sql;
+    - psql -H $DB_HOST -U $DB_USERNAME opensrp-scripts/opensrp-etl/omrs_foreign_tables.sql;
+    - psql -H $DB_HOST -U $DB_USERNAME opensrp-scripts/opensrp-etl/populate_facility_encounter_report.sql;
+    - psql -H $DB_HOST -U $DB_USERNAME opensrp-scripts/opensrp-etl/registrations_indicator_query.sql
+---
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: opensrp-etl
+spec:
+  schedule: "@hourly"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: etl-container
+            image: bluecodesystems/db-utils:0.2
+            command: ["/bin/sh", "/etc/scripts/opensrp-etl.sh"]
+            args:
+            env:
+            - name: DB_USERNAME
+              valueFrom:
+                configMapKeyRef:
+                  name: zeir-config
+                  key: opensrp-postgres-user
+            - name: DB_HOST
+              value: $(postgres-service)
+            volumeMounts:
+            - name: etl-script
+              mountPath: /etc/scripts
+              readOnly: true
+          volumes:
+          - name: etl-script
+            configMap:
+              name: opensrp-etl-script
+---
+apiVersion: v1
 kind: Service
 metadata:
   name: couchdb-service
