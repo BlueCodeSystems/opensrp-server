@@ -2,7 +2,21 @@ apiVersion: networking.k8s.io/v1beta1
 kind: Ingress
 metadata:
     name: zeir-ingress
+    annotations:
+      #nginx.ingress.kubernetes.io/rewrite-target: /
+      kubernetes.io/ingress.class: "nginx"
+      cert-manager.io/issuer: "letsencrypt-production"
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/app-root: "/opensrp"
 spec:
+  tls:
+  - hosts:
+    - zeir-openmrs.bluecodeltd.com
+    - zeir-opensrp.bluecodeltd.com
+    - zeir-data.bluecodeltd.com
+    - openmrs.zeir.smartregister.org
+    - zeir.smartregister.org
+    secretName: zeir-tls
   rules:
   - host: zeir-openmrs.bluecodeltd.com
     http:
@@ -12,6 +26,20 @@ spec:
           serviceName: openmrs-service
           servicePort: 8080
   - host: zeir-opensrp.bluecodeltd.com
+    http:
+      paths:
+      - path:
+        backend:
+          serviceName: opensrp-service
+          servicePort: 8080
+  - host: openmrs.zeir.smartregister.org
+    http:
+      paths:
+      - path:
+        backend:
+          serviceName: openmrs-service
+          servicePort: 8080
+  - host: zeir.smartregister.org
     http:
       paths:
       - path:

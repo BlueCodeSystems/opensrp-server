@@ -294,7 +294,7 @@ kind: CronJob
 metadata:
   name: opensrp-etl
 spec:
-  schedule: "@hourly"
+  schedule: "*/15 * * * *"
   jobTemplate:
     spec:
       template:
@@ -302,8 +302,8 @@ spec:
           restartPolicy: OnFailure
           containers:
           - name: etl-container
-            image: bluecodesystems/db-utils:0.2
-            command: ["/bin/sh", "/etc/scripts/opensrp-etl.sh"]
+            image: bluecodesystems/db-utils:0.3
+            command: ["/bin/sh", "-c", "/etc/scripts/opensrp-etl.sh"]
             args:
             env:
             - name: DB_USERNAME
