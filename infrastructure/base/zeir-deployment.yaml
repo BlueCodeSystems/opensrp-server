@@ -283,9 +283,10 @@ data:
   opensrp-etl.sh: |
     #!/bin/sh
     - git clone https://github.com/BlueCodeSystems/opensrp-scripts;
-    - psql -H $DB_HOST -U $DB_USERNAME opensrp-scripts/opensrp-etl/refresh_all_materialized_views.sql;
     - psql -H $DB_HOST -U $DB_USERNAME opensrp-scripts/opensrp-etl/facility_reporting_tables.sql;
+    - psql -H $DB_HOST -U $DB_USERNAME opensrp-scripts/opensrp-etl/refresh_all_materialized_views.sql;
     - psql -H $DB_HOST -U $DB_USERNAME opensrp-scripts/opensrp-etl/omrs_foreign_tables.sql;
+    - psql -H $DB_HOST -U $DB_USERNAME opensrp-scripts/opensrp-etl/materialized_views.sql;
     - psql -H $DB_HOST -U $DB_USERNAME opensrp-scripts/opensrp-etl/populate_facility_encounter_report.sql;
     - psql -H $DB_HOST -U $DB_USERNAME opensrp-scripts/opensrp-etl/registrations_indicator_query.sql
 ---
@@ -294,7 +295,7 @@ kind: CronJob
 metadata:
   name: opensrp-etl
 spec:
-  schedule: "*/15 * * * *"
+  schedule: "*/30 * * * *"
   jobTemplate:
     spec:
       template:
@@ -1149,7 +1150,6 @@ data:
     }
     
     
-    SQLALCHEMY_DATABASE_URI = os.getenv('SQLALCHEMY_DATABASE_URI', '')
     superset_db_password = os.getenv('SUPERSET_DB_PASSWORD', '')
     postgres_host = os.getenv('POSTGRES_HOST', '')
     SQLALCHEMY_DATABASE_URI='postgresql+psycopg2://superset:{0}@{1}:5432/superset'.format(superset_db_password,postgres_host)

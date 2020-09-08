@@ -9,14 +9,6 @@ metadata:
       nginx.ingress.kubernetes.io/ssl-redirect: "true"
       nginx.ingress.kubernetes.io/app-root: "/opensrp"
 spec:
-  tls:
-  - hosts:
-    - zeir-openmrs.bluecodeltd.com
-    - zeir-opensrp.bluecodeltd.com
-    - zeir-data.bluecodeltd.com
-    - openmrs.zeir.smartregister.org
-    - zeir.smartregister.org
-    secretName: zeir-tls
   rules:
   - host: zeir-openmrs.bluecodeltd.com
     http:
