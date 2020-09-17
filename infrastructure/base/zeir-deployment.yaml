@@ -282,20 +282,18 @@ metadata:
 data:
   opensrp-etl.sh: |
     #!/bin/sh
-    - git clone https://github.com/BlueCodeSystems/opensrp-scripts;
-    - psql -H $DB_HOST -U $DB_USERNAME opensrp-scripts/opensrp-etl/facility_reporting_tables.sql;
-    - psql -H $DB_HOST -U $DB_USERNAME opensrp-scripts/opensrp-etl/refresh_all_materialized_views.sql;
-    - psql -H $DB_HOST -U $DB_USERNAME opensrp-scripts/opensrp-etl/omrs_foreign_tables.sql;
-    - psql -H $DB_HOST -U $DB_USERNAME opensrp-scripts/opensrp-etl/materialized_views.sql;
-    - psql -H $DB_HOST -U $DB_USERNAME opensrp-scripts/opensrp-etl/populate_facility_encounter_report.sql;
-    - psql -H $DB_HOST -U $DB_USERNAME opensrp-scripts/opensrp-etl/registrations_indicator_query.sql
+    git clone https://github.com/BlueCodeSystems/opensrp-scripts;
+    psql -h $DB_HOST -U $DB_USERNAME < opensrp-scripts/opensrp-etl/materialized_views.sql;
+    psql -h $DB_HOST -U $DB_USERNAME < opensrp-scripts/opensrp-etl/materialized_views.sql;
+    psql -h $DB_HOST -U $DB_USERNAME < opensrp-scripts/opensrp-etl/populate_facility_encounter_report.sql;
+    psql -h $DB_HOST -U $DB_USERNAME < opensrp-scripts/opensrp-etl/registrations_indicator_query.sql
 ---
 apiVersion: batch/v1beta1
 kind: CronJob
 metadata:
   name: opensrp-etl
 spec:
-  schedule: "*/30 * * * *"
+  schedule: "0 0 * * *"
   jobTemplate:
     spec:
       template:
@@ -303,9 +301,8 @@ spec:
           restartPolicy: OnFailure
           containers:
           - name: etl-container
-            image: bluecodesystems/db-utils:0.3
-            command: ["/bin/sh", "-c", "/etc/scripts/opensrp-etl.sh"]
-            args:
+            image: bluecodesystems/opensrp-etl:0.3
+            command: ["/bin/sh", "/etc/scripts/opensrp-etl.sh"]
             env:
             - name: DB_USERNAME
               valueFrom:
@@ -314,6 +311,11 @@ spec:
                   key: opensrp-postgres-user
             - name: DB_HOST
               value: $(postgres-service)
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: zeir-secrets
+                  key: postgres-password
             volumeMounts:
             - name: etl-script
               mountPath: /etc/scripts
@@ -1148,7 +1150,6 @@ data:
       'CACHE_REDIS_URL': 'redis://:{0}@{1}:6379/2'.format(os.getenv('REDIS_PASSWORD',''), os.getenv('REDIS_HOST', ''))
 
     }
-    
     
     superset_db_password = os.getenv('SUPERSET_DB_PASSWORD', '')
     postgres_host = os.getenv('POSTGRES_HOST', '')
